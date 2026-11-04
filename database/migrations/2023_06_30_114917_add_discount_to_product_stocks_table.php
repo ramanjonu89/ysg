@@ -1,0 +1,35 @@
+<?php
+
+use GuzzleHttp\Psr7\DroppingStream;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+class AddDiscountToProductStocksTable extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        Schema::table('product_stocks', function (Blueprint $table) {
+            $table->float('discount')->nullable()->after('qty');
+            $table->string('discount_type')->nullable()->after('discount');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        Schema::table('product_stocks', function (Blueprint $table) {
+            $table->dropColumn('discount');
+            $table->dropColumn('discount_type');
+        });
+    }
+}

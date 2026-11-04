@@ -1,0 +1,92 @@
+/* your custom style goes here */
+
+/*YSG custom page*/
+.ysg-custom-page .block.image_link .wrap {
+  display: flex;
+}
+
+.modal-open .modal {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.coupon-popup .modal-dialog {
+  max-width: 450px;
+}
+
+.coupon-popup .modal-header {
+  border-bottom: none;
+}
+
+.coupon-popup .modal-title {
+  color: rgb(36, 36, 36);
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.coupon {
+  border-radius: 5px;
+  position: relative;
+  height: 130px;
+  margin-bottom: 10px;
+}
+
+.coupon p {
+  margin-bottom: 5px;
+}
+
+.coupon-left {
+  border: none;
+  border-radius: 20px;
+  width: 20px;
+  height: 20px;
+  background-color: #fff;
+  position: absolute;
+  top: 55px;
+  left: -10px;
+}
+
+.coupon-con {
+  padding: 10px 20px;
+}
+.text-bold {
+  font-weight: bold;
+}
+
+.coupon-popup-by-admin .modal-dialog {
+  max-width: 450px;
+}
+
+/*sac*/
+.block-product-carousel {
+  display: flex;
+  align-items: flex-end;
+  .product-box-2 {
+    border-radius: 4px;
+    .card-jfy-title {
+      color: #000;
+      a {
+        color: #000;
+      }
+    }
+    .product-btns {
+      background: transparent;
+    }
+    &:hover {
+      background: rgb(253,72,97);
+      background: linear-gradient(200deg, rgba(253,72,97,1) 30%, rgba(255,167,51,1) 100%);
+      .product-btns .btn {
+        color: #ff7d49;
+      }
+      .price-box .product-price,
+      .price-box .old-product-price,
+      .product-title a,
+      .card-jfy-title,
+      .card-jfy-title a {
+        color: white;
+      }
+    }
+  }
+  .image-box {
+    padding: 0.5rem;
+  }
+}

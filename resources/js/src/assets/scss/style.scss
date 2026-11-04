@@ -1,0 +1,30 @@
+/*================================================================================
+
+NOTE:
+------
+PLACE HERE YOUR OWN SCSS CODES AND IF NEEDED, OVERRIDE THE STYLES FROM THE OTHER STYLESHEETS.
+WE WILL RELEASE FUTURE UPDATES SO IN ORDER TO NOT OVERWRITE YOUR STYLES IT'S BETTER LIKE THIS.  */
+.rounded-left-0 {
+    border-bottom-left-radius: 0;
+    border-top-left-radius: 0;
+}
+
+.vertical-layout.vertical-menu-modern.menu-expanded .main-menu .navigation li.has-sub {
+    > a {
+        &:after {
+            background-image: none !important;
+        }
+        .iconify {
+            transform: rotate(0deg);
+        }
+    }
+    &.open:not(.menu-item-closing) {
+        > a .iconify {
+            transform: rotate(90deg);
+        }
+    }
+}
+
+.Vue-Toastification__toast-body {
+    font-size: 1.5rem;
+}

@@ -1,0 +1,587 @@
+<?php
+namespace App\Http\Controllers;
+
+use App\Models\Address;
+use App\BusinessSetting;
+use App\Models\Category;
+use App\Coupon;
+use App\CouponUsage;
+use App\Http\Controllers\AffiliateController;
+use App\Http\Controllers\ClubPointController;
+use App\Http\Controllers\PaytmController;
+use App\Order;
+use App\Utility\PayhereUtility;
+use Auth;
+use Illuminate\Http\Request;
+use Session;
+
+class CheckoutController extends Controller
+{
+    public function __construct()
+    {
+        //
+    }
+
+    //check the selected payment gateway and redirect to that controller accordingly
+    public function checkout(Request $request)
+    {
+        if ($request->payment_option != null) {
+            $orderController = new OrderController;
+            $orderController->store($request);
+            $request->session()->put('payment_type', 'cart_payment');
+            if ($request->session()->get('order_id') != null) {
+                if ($request->payment_option == 'paypal') {
+                    $paypal = new PaypalController;
+
+                    return $paypal->getCheckout();
+                } elseif ($request->payment_option == 'stripe') {
+                    $stripe = new StripePaymentController;
+
+                    return $stripe->stripe();
+                } elseif ($request->payment_option == 'sslcommerz') {
+                    $sslcommerz = new PublicSslCommerzPaymentController;
+
+                    return $sslcommerz->index($request);
+                } elseif ($request->payment_option == 'instamojo') {
+                    $instamojo = new InstamojoController;
+
+                    return $instamojo->pay($request);
+                } elseif ($request->payment_option == 'razorpay') {
+                    $razorpay = new RazorpayController;
+
+                    return $razorpay->payWithRazorpay($request);
+                } elseif ($request->payment_option == 'paystack') {
+                    $paystack = new PaystackController;
+
+                    return $paystack->redirectToGateway($request);
+                } elseif ($request->payment_option == 'voguepay') {
+                    $voguePay = new VoguePayController;
+
+                    return $voguePay->customer_showForm();
+                } elseif ($request->payment_option == 'twocheckout') {
+                    $twocheckout = new TwoCheckoutController;
+
+                    return $twocheckout->index($request);
+                } elseif ($request->payment_option == 'payhere') {
+                    $order = Order::findOrFail($request->session()->get('order_id'));
+                    $order_id = $order->id;
+                    $amount = $order->grand_total;
+                    $first_name = json_decode($order->shipping_address)->name;
+                    $last_name = 'X';
+                    $phone = json_decode($order->shipping_address)->phone;
+                    $email = json_decode($order->shipping_address)->email;
+                    $address = json_decode($order->shipping_address)->address;
+                    $city = json_decode($order->shipping_address)->city;
+
+                    return PayhereUtility::create_checkout_form($order_id, $amount, $first_name, $last_name, $phone, $email, $address, $city);
+                } elseif ($request->payment_option == 'paytm') {
+                    $paytm = new PaytmController;
+
+                    return $paytm->index();
+                } elseif ($request->payment_option == 'cash_on_delivery') {
+                    $request->session()->put('cart', collect([]));
+                    // $request->session()->forget('order_id');
+                    $request->session()->forget('delivery_info');
+                    $request->session()->forget('coupon_id');
+                    $request->session()->forget('coupon_discount');
+                    flash(__("Your order has been placed successfully"))->success();
+
+                    return redirect()->route('order_confirmed');
+                } elseif ($request->payment_option == 'wallet') {
+                    $user = Auth::user();
+                    $user->balance -= Order::findOrFail($request->session()->get('order_id'))->grand_total;
+                    $user->save();
+
+                    return $this->checkout_done($request->session()->get('order_id'), null);
+                } else {
+                    $order = Order::findOrFail($request->session()->get('order_id'));
+                    $order->manual_payment = 1;
+                    $order->save();
+                    $request->session()->put('cart', collect([]));
+                    // $request->session()->forget('order_id');
+                    $request->session()->forget('delivery_info');
+                    $request->session()->forget('coupon_id');
+                    $request->session()->forget('coupon_discount');
+                    flash(__('Your order has been placed successfully. Please submit payment information from purchase history'))->success();
+
+                    return redirect()->route('order_confirmed');
+                }
+            }
+        } else {
+            //$stripe = new StripePaymentController;
+            //return $stripe->stripe();
+            flash(__('Select Payment Option.'))->warning();
+
+            return back();
+        }
+    }
+
+    //redirects to this method after a successfull checkout
+    public function checkout_done($order_id, $payment)
+    {
+        $order = Order::findOrFail($order_id);
+        $order->payment_status = 'paid';
+        $order->payment_details = $payment;
+        $order->save();
+        // echo '<pre>';
+        // var_dump($order);
+        //echo '</pre>';
+        //exit;
+        //lets call OMS
+        foreach ($order->orderDetails as $key => $orderDetail) {
+            if ($orderDetail->product->user->user_type == 'seller') {
+                $seller = $orderDetail->product->user->seller;
+                $company_id = $seller->company_id;
+                $seller_id = $seller->user_id;
+                $curl = curl_init();
+                curl_setopt_array($curl, array(
+                    CURLOPT_URL => "https://uat-api.ascentisoms.com/v1/auth",
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_ENCODING => "",
+                    CURLOPT_MAXREDIRS => 10,
+                    CURLOPT_TIMEOUT => 0,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                    CURLOPT_CUSTOMREQUEST => "POST",
+                    CURLOPT_POSTFIELDS => "{\n\t\"companyId\": \"$company_id\"\n}",
+                    CURLOPT_HTTPHEADER => array(
+                        "Content-Type: application/json",
+                        "Authorization: Basic Og=="
+                    ),
+                ));
+                $response = json_decode(curl_exec($curl));
+                curl_close($curl);
+                if (is_object($response) && isset($response->accessToken)) {
+                    $data = array(
+                        'orderNumber' => $order->code,
+                        'orderDate' => date('c'),
+                        'marketplaceCode' => "ysg-sg",
+                        'orderType' => "sale-order",
+                        // 'deliveryMethod' => $order->get_shipping_method(),
+                        'deliveryMethod' => "home-delivery",
+                        'originalOrderNumber' => '',
+                        'referralCode' => '',
+                        'customerType' => 'guest',
+                        'customerInfo' =>
+                            array(
+                                'address' => json_decode($order->shipping_address)->address,
+                                'country' => json_decode($order->shipping_address)->country,
+                                'customerId' => $orderDetail->user_id,
+                                'email' => json_decode($order->shipping_address)->email,
+                                'name' => json_decode($order->shipping_address)->name,
+                                'phoneNum' => json_decode($order->shipping_address)->phone,
+                                'postCode' => json_decode($order->shipping_address)->postal_code,
+                                'region' => json_decode($order->shipping_address)->city,
+                            ),
+                        'currency' => 'SGD',
+                        'exchangeRate' => 0,
+                        'subTotal' => $order->grand_total,
+                        'shippingFee' => $orderDetail->shipping_cost,
+                        'totalCartDiscount' => 0,
+                        'totalAmountDue' => $order->grand_total,
+                        'totalAmountPaid' => $order->grand_total,
+                        'balanceAmountDue' => 0,
+                        'totalTaxAmount' => 0,
+                        'base_TotalAmountDue' => 0,
+                        'base_TotalAmountPaid' => $order->grand_total,
+                        'base_BalanceAmountDue' => 0,
+                        'base_TotalTaxAmount' => 0,
+                        'paymentInfo' =>
+                            array(
+                                array(
+                                    'amount' => $order->grand_total,
+                                    'mode' => "Credit Card",
+                                    'referenceNumber' => '', //not sure how to get it
+                                    'remarks' => '',
+                                ),
+                            ),
+                        'shippingInfo' =>
+                            array(
+                                array(
+                                    'deliveryAddress' => json_decode($order->shipping_address)->address,
+                                    'country' => json_decode($order->shipping_address)->country,
+                                    'customerId' => $orderDetail->user_id,
+                                    'email' => json_decode($order->shipping_address)->email,
+                                    'recipientName' => json_decode($order->shipping_address)->name,
+                                    'recipientPhoneNumber' => json_decode($order->shipping_address)->phone,
+                                    'postCode' => json_decode($order->shipping_address)->postal_code,
+                                    'region' => json_decode($order->shipping_address)->city,
+                                    'shippedDate' => date('c'),
+                                    'shippingLabel' => '',
+                                    'shippingMethod' => 'Dropshipping',
+                                    'status' => 'order-received',
+                                    'trackingNum' => '',
+                                ),
+                            ),
+                        'status' => 'paid',
+                        'cancelledReason' => '',
+                        'createdOn' => date('c'),
+                        'lastUpdatedOn' => date('c'),
+                        'items' => array(),
+                        'shippingServiceLevel' => '3DA',
+                    );
+                    foreach ($order->orderDetails as $key => $orderDetail) {
+                        if ($seller_id == $orderDetail->product->user->seller->user_id) {
+                            $data['items'][] = array(
+                                'productCode' => $orderDetail->product->unit,
+                                'productName' => $orderDetail->product->name,
+                                'base_FinalLineAmount' => 0,
+                                'finalLineAmount' => $orderDetail->price,
+                                'lineDiscount' => 0,
+                                'remarks' => '',
+                                'returnQuantity' => 0,
+                                'shipQuantity' => $orderDetail->quantity,
+                                'soldQuantity' => $orderDetail->quantity,
+                                'status' => 'paid',
+                                'taxAmount' => 0,
+                                'totalApportionedCartDiscount' => 0,
+                                'totalLineDiscount' => 0,
+                                'totalPriceAfterLineDiscount' => 0,
+                                'unitPrice' => $orderDetail->product->unit_price,
+                                'unitWeight' => 0,
+                            );
+                        }
+                    }
+                    $accessToken = $response->accessToken;
+                    $curl = curl_init();
+                    curl_setopt_array($curl, array(
+                        CURLOPT_URL => "https://uat-api.ascentisoms.com/v1/order/create",
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => "",
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 0,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => "POST",
+                        CURLOPT_POSTFIELDS => json_encode($data),
+                        CURLOPT_HTTPHEADER => array(
+                            "Content-Type: application/json",
+                            "Authorization: Bearer $accessToken"
+                        ),
+                    ));
+                    $response_2 = json_decode(curl_exec($curl));
+                    // var_dump( $response_2);
+                    curl_close($curl);
+                    if ($response_2->messages == 'Success') {
+                    } else {
+                        echo $response_2->errors;
+                        exit;
+                    }
+                } else {
+                    //ECHO "CANNOT LOGIN LA";
+                    exit;
+                }
+            }
+        }
+        // exit;
+        if (\App\Addon::where('unique_identifier', 'affiliate_system')->first() != null && \App\Addon::where('unique_identifier', 'affiliate_system')->first()->activated) {
+            $affiliateController = new AffiliateController;
+            $affiliateController->processAffiliatePoints($order);
+        }
+        if (\App\Addon::where('unique_identifier', 'club_point')->first() != null && \App\Addon::where('unique_identifier', 'club_point')->first()->activated) {
+            $clubpointController = new ClubPointController;
+            $clubpointController->processClubPoints($order);
+        }
+        if (\App\Addon::where('unique_identifier', 'seller_subscription')->first() == null || !\App\Addon::where('unique_identifier', 'seller_subscription')->first()->activated) {
+            if (BusinessSetting::where('type', 'category_wise_commission')->first()->value != 1) {
+                $commission_percentage = BusinessSetting::where('type', 'vendor_commission')->first()->value;
+                foreach ($order->orderDetails as $key => $orderDetail) {
+                    $orderDetail->payment_status = 'paid';
+                    $orderDetail->save();
+                    if ($orderDetail->product->user->user_type == 'seller') {
+                        $seller = $orderDetail->product->user->seller;
+                        $seller->admin_to_pay = $seller->admin_to_pay + ($orderDetail->price * (100 - $commission_percentage)) / 100 + $orderDetail->tax + $orderDetail->shipping_cost;
+                        $seller->save();
+                    }
+                }
+            } else {
+                foreach ($order->orderDetails as $key => $orderDetail) {
+                    $orderDetail->payment_status = 'paid';
+                    $orderDetail->save();
+                    if ($orderDetail->product->user->user_type == 'seller') {
+                        $commission_percentage = $orderDetail->product->category->commision_rate;
+                        $seller = $orderDetail->product->user->seller;
+                        $seller->admin_to_pay = $seller->admin_to_pay + ($orderDetail->price * (100 - $commission_percentage)) / 100 + $orderDetail->tax + $orderDetail->shipping_cost;
+                        $seller->save();
+                    }
+                }
+            }
+        } else {
+            foreach ($order->orderDetails as $key => $orderDetail) {
+                $orderDetail->payment_status = 'paid';
+                $orderDetail->save();
+                if ($orderDetail->product->user->user_type == 'seller') {
+                    $seller = $orderDetail->product->user->seller;
+                    $seller->admin_to_pay = $seller->admin_to_pay + $orderDetail->price + $orderDetail->tax + $orderDetail->shipping_cost;
+                    $seller->save();
+                }
+            }
+        }
+        $order->commission_calculated = 1;
+        $order->save();
+        Session::put('cart', collect([]));
+        // Session::forget('order_id');
+        Session::forget('payment_type');
+        Session::forget('delivery_info');
+        Session::forget('coupon_id');
+        Session::forget('coupon_discount');
+
+        //flash(__('Payment completed'))->success();
+        return view('frontend.order_confirmed', compact('order'));
+    }
+
+    public function get_shipping_info(Request $request)
+    {
+        if (Session::has('cart') && count(Session::get('cart')) > 0) {
+            $categories = Category::all();
+
+            return view('frontend.shipping_info', compact('categories'));
+        }
+        flash(__('Your cart is empty'))->success();
+
+        return back();
+    }
+
+    public function store_shipping_info(Request $request)
+    {
+        if (Auth::check()) {
+            if ($request->address_id == null) {
+                flash(__("Please add shipping address"))->warning();
+
+                return back();
+            }
+            $address = Address::findOrFail($request->address_id);
+            $data['name'] = Auth::user()->name;
+            $data['email'] = Auth::user()->email;
+            $data['address'] = $address->address;
+            $data['country'] = $address->country;
+            $data['city'] = $address->city;
+            $data['postal_code'] = $address->postal_code;
+            $data['phone'] = $address->phone;
+            $data['checkout_type'] = $request->checkout_type;
+        } else {
+            $data['name'] = $request->name;
+            $data['email'] = $request->email;
+            $data['address'] = $request->address;
+            $data['country'] = $request->country;
+            $data['city'] = $request->city;
+            $data['postal_code'] = $request->postal_code;
+            $data['phone'] = $request->phone;
+            $data['checkout_type'] = $request->checkout_type;
+        }
+        $shipping_info = $data;
+        $request->session()->put('shipping_info', $shipping_info);
+        $subtotal = 0;
+        $tax = 0;
+        $shipping = 0;
+        foreach (Session::get('cart') as $key => $cartItem) {
+            $subtotal += $cartItem['price'] * $cartItem['quantity'];
+            $tax += $cartItem['tax'] * $cartItem['quantity'];
+            $shipping += $cartItem['shipping'] * $cartItem['quantity'];
+        }
+        $total = $subtotal + $tax + $shipping;
+        if (Session::has('coupon_discount')) {
+            $total -= Session::get('coupon_discount');
+        }
+
+        return view('frontend.delivery_info');
+        // return view('frontend.payment_select', compact('total'));
+    }
+
+    public function store_delivery_info(Request $request)
+    {
+        if (Auth::check()) {
+            if ($request->address_id == null) {
+                flash(__("Please add shipping address"))->warning();
+
+                return back();
+            }
+            $address = Address::findOrFail($request->address_id);
+            $data['name'] = Auth::user()->name;
+            $data['email'] = Auth::user()->email;
+            $data['address'] = $address->address;
+            $data['country'] = $address->country;
+            $data['city'] = $address->city;
+            $data['postal_code'] = $address->postal_code;
+            $data['phone'] = $address->phone;
+            $data['checkout_type'] = $request->checkout_type;
+        } else {
+            $data['name'] = $request->name;
+            $data['email'] = $request->email;
+            $data['address'] = $request->address;
+            $data['country'] = $request->country;
+            $data['city'] = $request->city;
+            $data['postal_code'] = $request->postal_code;
+            $data['phone'] = $request->phone;
+            $data['checkout_type'] = $request->checkout_type;
+        }
+        $shipping_info = $data;
+        $request->session()->put('shipping_info', $shipping_info);
+        $subtotal = 0;
+        $tax = 0;
+        $shipping = 0;
+        foreach (Session::get('cart') as $key => $cartItem) {
+            $subtotal += $cartItem['price'] * $cartItem['quantity'];
+            $tax += $cartItem['tax'] * $cartItem['quantity'];
+            $shipping += $cartItem['shipping'] * $cartItem['quantity'];
+        }
+        $total = $subtotal + $tax + $shipping;
+        if (Session::has('coupon_discount')) {
+            $total -= Session::get('coupon_discount');
+        }
+        //return view('frontend.delivery_info');
+        // return view('frontend.payment_select', compact('total'));
+        if (Session::has('cart') && count(Session::get('cart')) > 0) {
+            $cart = $request->session()->get('cart', collect([]));
+            $cart = $cart->map(function($object, $key) use ($request) {
+                if (\App\Product::find($object['id'])->added_by == 'admin') {
+                    if ($request['shipping_type_admin'] == 'home_delivery') {
+                        $object['shipping_type'] = 'home_delivery';
+                    } else {
+                        $object['shipping_type'] = 'pickup_point';
+                        $object['pickup_point'] = $request->pickup_point_id_admin;
+                    }
+                } else {
+                    if ($request['shipping_type_' . \App\Product::find($object['id'])->user_id] == 'home_delivery') {
+                        $object['shipping_type'] = 'home_delivery';
+                    } else {
+                        $object['shipping_type'] = 'pickup_point';
+                        $object['pickup_point'] = $request['pickup_point_id_' . \App\Product::find($object['id'])->user_id];
+                    }
+                }
+
+                return $object;
+            });
+            $request->session()->put('cart', $cart);
+            $cart = $cart->map(function($object, $key) use ($request) {
+                $object['shipping'] = getShippingCost($key);
+
+                return $object;
+            });
+            $request->session()->put('cart', $cart);
+            $subtotal = 0;
+            $tax = 0;
+            $shipping = 0;
+            foreach (Session::get('cart') as $key => $cartItem) {
+                $subtotal += $cartItem['price'] * $cartItem['quantity'];
+                $tax += $cartItem['tax'] * $cartItem['quantity'];
+                $shipping += $cartItem['shipping'] * $cartItem['quantity'];
+            }
+            //hard code delivery cost as $2 less than $80 cart value
+            if ($subtotal < 80) {
+                $shipping = 2;
+            }
+            $total = $subtotal + $shipping;
+            if (Session::has('coupon_discount')) {
+                $total -= Session::get('coupon_discount');
+            }
+
+            //dd($total);
+            return view('frontend.delivery_info');
+            //return view('frontend.payment_select', compact('total'));
+        } else {
+            flash(__('Your Cart was empty'))->warning();
+
+            return redirect()->route('home');
+        }
+    }
+
+    public function get_payment_info(Request $request)
+    {
+        $subtotal = 0;
+        $tax = 0;
+        $shipping = 0;
+        foreach (Session::get('cart') as $key => $cartItem) {
+            $subtotal += $cartItem['price'] * $cartItem['quantity'];
+            $tax += $cartItem['tax'] * $cartItem['quantity'];
+            $shipping += $cartItem['shipping'] * $cartItem['quantity'];
+        }
+        if ($subtotal < 80) {
+            $shipping = 2;
+        }
+        $total = $subtotal + $shipping;
+        // $total = $subtotal + $shipping;
+        if (Session::has('coupon_discount')) {
+            $total -= Session::get('coupon_discount');
+        }
+
+        return view('frontend.payment_select', compact('total'));
+    }
+
+    public function apply_coupon_code(Request $request)
+    {
+        //dd($request->all());
+        $coupon = Coupon::where('code', $request->code)->first();
+        if ($coupon != null) {
+            if (strtotime(date('d-m-Y')) >= $coupon->start_date && strtotime(date('d-m-Y')) <= $coupon->end_date) {
+                if (CouponUsage::where('user_id', Auth::user()->id)->where('coupon_id', $coupon->id)->first() == null) {
+                    $coupon_details = json_decode($coupon->details);
+                    if ($coupon->type == 'cart_base') {
+                        $subtotal = 0;
+                        $tax = 0;
+                        $shipping = 0;
+                        foreach (Session::get('cart') as $key => $cartItem) {
+                            $subtotal += $cartItem['price'] * $cartItem['quantity'];
+                            $tax += $cartItem['tax'] * $cartItem['quantity'];
+                            $shipping += $cartItem['shipping'] * $cartItem['quantity'];
+                        }
+                        $sum = $subtotal + $tax + $shipping;
+                        if ($sum > $coupon_details->min_buy) {
+                            if ($coupon->discount_type == 'percent') {
+                                $coupon_discount = ($sum * $coupon->discount) / 100;
+                                if ($coupon_discount > $coupon_details->max_discount) {
+                                    $coupon_discount = $coupon_details->max_discount;
+                                }
+                            } elseif ($coupon->discount_type == 'amount') {
+                                $coupon_discount = $coupon->discount;
+                            }
+                            $request->session()->put('coupon_id', $coupon->id);
+                            $request->session()->put('coupon_discount', $coupon_discount);
+                            flash(__('Coupon has been applied'))->success();
+                        }
+                    } elseif ($coupon->type == 'product_base') {
+                        $coupon_discount = 0;
+                        foreach (Session::get('cart') as $key => $cartItem) {
+                            foreach ($coupon_details as $key => $coupon_detail) {
+                                if ($coupon_detail->product_id == $cartItem['id']) {
+                                    if ($coupon->discount_type == 'percent') {
+                                        $coupon_discount += $cartItem['price'] * $coupon->discount / 100;
+                                    } elseif ($coupon->discount_type == 'amount') {
+                                        $coupon_discount += $coupon->discount;
+                                    }
+                                }
+                            }
+                        }
+                        $request->session()->put('coupon_id', $coupon->id);
+                        $request->session()->put('coupon_discount', $coupon_discount);
+                        flash(__('Coupon has been applied'))->success();
+                    }
+                } else {
+                    flash(__('You already used this coupon!'))->warning();
+                }
+            } else {
+                flash(__('Coupon expired!'))->warning();
+            }
+        } else {
+            flash(__('Invalid coupon!'))->warning();
+        }
+
+        return back();
+    }
+
+    public function remove_coupon_code(Request $request)
+    {
+        $request->session()->forget('coupon_id');
+        $request->session()->forget('coupon_discount');
+
+        return back();
+    }
+
+    public function order_confirmed()
+    {
+        $order = Order::findOrFail(Session::get('order_id'));
+
+        return view('frontend.order_confirmed', compact('order'));
+    }
+}
+

@@ -1,0 +1,39 @@
+{
+  "login": {
+    "welcome": "Welcome to YSG Seller Center! 👋",
+    "welcome_description": "Please sign-in to your account and start the adventure",
+    "forgot_password": "Forgot Password?"
+  },
+  "form": {
+    "input": {
+      "email": "Email",
+      "password": "Password",
+      "remember_me": "Remember Me"
+    },
+    "placeholder": {
+      "email": "john@example.com",
+      "password": "············"
+    },
+    "message": {
+    }
+  },
+  "Coupon code": "Coupon code",
+  "Orders": "Orders",
+  "Coupons": "Coupons",
+  "Add": "Add",
+  "Add new coupon": "Add new coupon",
+  "Coupon title": "Coupon title",
+  "Description": "Description",
+  "No. of Coupon": "No. of Coupon",
+  "Minimum Cart value": "Minimum Cart value",
+  "Discount": "Discount",
+  "Maximum discount amount": "Maximum discount amount",
+  "Date": "Date",
+  "Start date": "Start date",
+  "End date": "End date",
+  "Submit": "Submit",
+  "Cancel": "Cancel",
+  "Dashboard": "Dashboard",
+  "product_base": "Selected products",
+  "cart_base": "All products"
+}

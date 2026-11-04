@@ -1,0 +1,41 @@
+name: 'Branch deploy'
+
+on:
+  issue_comment:
+    types: [ created ]
+
+jobs:
+  deploy:
+    if: ${{ github.event.issue.pull_request }} # only run on pull request comments
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: branch-deploy
+      uses: github/branch-deploy@v2.3.0
+      id: branch-deploy
+      with:
+        trigger: ".deploy"
+        reaction: "eyes"
+        stable_branch: "master"
+
+    - name: Checkout
+      uses: actions/checkout@v3.0.2
+      with:
+        ref: ${{ steps.branch-deploy.outputs.ref }}
+
+
+    - name: Deployment
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        username: ${{ secrets.SSH_USERNAME }}
+        command_timeout: 200m
+
+        script: |
+          cd ~/www/devysg/
+          git pull
+          git checkout ${{ steps.branch-deploy.outputs.ref }}
+          git pull
+          /usr/bin/npm run prod
+          /usr/bin/docker exec laradock_workspace_1 bash -c 'cd devysg && php artisan migrate --force'

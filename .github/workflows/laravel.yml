@@ -1,0 +1,26 @@
+name: Laravel
+
+on:
+  push:
+    branches: [ develop_uat ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Deployment
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        username: ${{ secrets.SSH_USERNAME }}
+
+        script: |
+          cd ~/www/ysg/
+          git pull
+          /usr/bin/npm run prod
+          /usr/bin/php artisan migrate --force

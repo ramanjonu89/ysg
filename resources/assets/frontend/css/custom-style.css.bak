@@ -1,0 +1,53 @@
+/* your custom style goes here */
+
+/*YSG custom page*/
+.ysg-custom-page .block.image_link .wrap {
+    display: flex;
+}
+
+.modal-open .modal {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.coupon-popup .modal-dialog {
+    max-width: 450px;
+}
+
+.coupon-popup .modal-header {
+    border-bottom: none;
+}
+
+.coupon-popup .modal-title {
+    color: rgb(36, 36, 36);
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.coupon {
+    border-radius: 5px;
+    position: relative;
+    height: 100px;
+    margin-bottom: 10px;
+}
+
+.coupon p {
+    margin-bottom: 5px;
+}
+
+.coupon-left {
+    border: none;
+    border-radius: 20px;
+    width: 20px;
+    height: 20px;
+    background-color: #fff;
+    position: absolute;
+    top: 40px;
+    left: -10px;
+}
+
+.coupon-con {
+    padding: 10px 20px;
+}
+.text-bold {
+    font-weight: bold;
+}
