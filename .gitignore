@@ -28,7 +28,7 @@ composer.lock
 firebase-credentials.json
 *firebase*.json
 !config/firebase.php
-Homestead.yaml
+Homestead.yaml 
 Homestead.json
 /.vagrant
 .phpunit.result.cache
