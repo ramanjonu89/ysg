@@ -1,2 +1,0 @@
-[03-Oct-2020 13:39:27 Asia/Singapore] PHP Fatal error:  Cannot redeclare App\Console\curl_load() (previously declared in /home/ysgcom/public_html/uat/app/Console/Kernel.php:119) in /home/ysgcom/public_html/uat/app/Console/Kernel.php on line 119
-[03-Oct-2020 13:40:06 Asia/Singapore] PHP Fatal error:  Cannot redeclare App\Console\curl_load() (previously declared in /home/ysgcom/public_html/uat/app/Console/Kernel.php:107) in /home/ysgcom/public_html/uat/app/Console/Kernel.php on line 107

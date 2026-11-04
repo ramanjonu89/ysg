@@ -22,7 +22,6 @@ storage/*.key
 storage/framework/
 storage/firebase/
 
-composer.lock
 .env
 .env.example
 firebase-credentials.json

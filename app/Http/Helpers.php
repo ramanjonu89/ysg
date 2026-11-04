@@ -1115,7 +1115,7 @@ if (!function_exists('getSecondaryColor')) {
         if (isMicrosite() && !empty(getMicrosite()->second_color)) {
             return getMicrosite()->second_color;
         }
-        return \App\Models\GeneralSetting::first()->frontend_secondary_color;
+        return \App\Models\GeneralSetting::first()->frontend_secondary_color ?: '#FBE0DA';
     }
 }
 
@@ -1142,7 +1142,7 @@ if (!function_exists('getMenuBarAreaColor')) {
         if (isMicrosite() && !empty(getMicrosite()->color)) {
             return getMicrosite()->color;
         }
-        return \App\Models\GeneralSetting::first()->color_menu_bar_area;
+        return \App\Models\GeneralSetting::first()->color_menu_bar_area ?: '#fef8f7';
     }
 }
 
@@ -1155,7 +1155,7 @@ if (!function_exists('getMenuBarMainColor')) {
         if (isMicrosite() && !empty(getMicrosite()->color)) {
             return getMicrosite()->color;
         }
-        return \App\Models\GeneralSetting::first()->color_menu_bar_main;
+        return \App\Models\GeneralSetting::first()->color_menu_bar_main ?: '#fdf0ed';
     }
 }
 
@@ -1168,7 +1168,7 @@ if (!function_exists('getMenuBarTextColor')) {
         if (isMicrosite() && !empty(getMicrosite()->color)) {
             return getMicrosite()->color;
         }
-        return \App\Models\GeneralSetting::first()->color_menu_bar_text;
+        return \App\Models\GeneralSetting::first()->color_menu_bar_text ?: '#e62e04';
     }
 }
 
